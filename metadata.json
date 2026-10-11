@@ -1,0 +1,7 @@
+{
+  "name": "Takimet - Kalendari Online i Rezervimeve",
+  "description": "Sistem modern dhe elegant për rezervimin e takimeve online në shqip me orare, menaxhim për klientët dhe panel administratori.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
