@@ -3,11 +3,11 @@ import { Appointment, BlockedSlot, BusinessSettings, Service } from '../types';
 import { generateBookingCode, getTodayDateStr, addDays } from '../utils/dateUtils';
 
 const STORAGE_KEYS = {
-  APPOINTMENTS: 'takimet_solo_barber_v3_appointments',
-  BLOCKED_SLOTS: 'takimet_solo_barber_v3_blocked',
-  SERVICES: 'takimet_solo_barber_v3_services',
-  SETTINGS: 'takimet_solo_barber_v3_settings',
-  ADMIN_AUTH: 'takimet_solo_barber_v3_auth',
+  APPOINTMENTS: 'takimet_solo_barber_v4_appointments',
+  BLOCKED_SLOTS: 'takimet_solo_barber_v4_blocked',
+  SERVICES: 'takimet_solo_barber_v4_services',
+  SETTINGS: 'takimet_solo_barber_v4_settings',
+  ADMIN_AUTH: 'takimet_solo_barber_v4_auth',
 };
 
 const DEFAULT_SERVICES: Service[] = [
@@ -67,8 +67,8 @@ const DEFAULT_SETTINGS: BusinessSettings = {
   category: 'Sallon & Berberhane Profesionale',
   city: 'Tiranë',
   address: 'Rruga e Sallonit',
-  phone: '+355 69 000 0000',
-  whatsappNumber: '355690000000',
+  phone: '+491786922244',
+  whatsappNumber: '491786922244',
   instagram: '@sallon.berberi',
   currency: 'LEK',
   workDays: [1, 2, 3, 4, 5, 6], // E Hënë - E Shtunë
@@ -77,7 +77,7 @@ const DEFAULT_SETTINGS: BusinessSettings = {
   slotIntervalMinutes: 30,
   breakStart: '13:30',
   breakEnd: '14:30',
-  adminPin: '1234',
+  adminPin: '2303',
   blockedDates: [],
 };
 
@@ -274,7 +274,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [settings]);
 
   const loginAdmin = (pin: string): boolean => {
-    if (pin === settings.adminPin || pin === '1234') {
+    if (pin === settings.adminPin) {
       setIsAdminAuthenticated(true);
       try {
         sessionStorage.setItem(STORAGE_KEYS.ADMIN_AUTH, 'true');

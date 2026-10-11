@@ -57,9 +57,6 @@ export const PinModal: React.FC<PinModalProps> = ({ isOpen, onClose, onSuccess }
           <p className="text-xs text-slate-400 mt-1">
             Vendosni kodin PIN për të hyrë në menaxhimin e orareve dhe takimeve.
           </p>
-          <p className="text-[11px] text-amber-400/80 font-mono mt-0.5">
-            (PIN i paracaktuar: 1234)
-          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
