@@ -3,12 +3,44 @@ import { Appointment, BlockedSlot, BusinessSettings, Service } from '../types';
 import { generateBookingCode, getTodayDateStr, addDays } from '../utils/dateUtils';
 
 const STORAGE_KEYS = {
-  APPOINTMENTS: 'takimet_solo_barber_v4_appointments',
-  BLOCKED_SLOTS: 'takimet_solo_barber_v4_blocked',
-  SERVICES: 'takimet_solo_barber_v4_services',
-  SETTINGS: 'takimet_solo_barber_v4_settings',
-  ADMIN_AUTH: 'takimet_solo_barber_v4_auth',
+  APPOINTMENTS: 'takimet_solo_barber_v5_appointments',
+  BLOCKED_SLOTS: 'takimet_solo_barber_v5_blocked',
+  SERVICES: 'takimet_solo_barber_v5_services',
+  SETTINGS: 'takimet_solo_barber_v5_settings',
+  ADMIN_AUTH: 'takimet_solo_barber_v5_auth',
 };
+
+// Cloud Database Bucket for Realtime Multi-Device Sync (works on Vercel & Mobile)
+const CLOUD_API_BASE = 'https://kvdb.io/SHpeRU9bJhXYwBfsqsiujJ';
+
+async function fetchCloudData<T>(endpoint: string): Promise<T | null> {
+  try {
+    const res = await fetch(`${CLOUD_API_BASE}/${endpoint}?_t=${Date.now()}`);
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text || text.trim() === '' || text.trim() === 'null') return null;
+    return JSON.parse(text) as T;
+  } catch (err) {
+    console.warn(`[CloudDB] Error reading ${endpoint}:`, err);
+    return null;
+  }
+}
+
+async function saveCloudData<T>(endpoint: string, data: T): Promise<boolean> {
+  try {
+    const res = await fetch(`${CLOUD_API_BASE}/${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn(`[CloudDB] Error saving ${endpoint}:`, err);
+    return false;
+  }
+}
 
 const DEFAULT_SERVICES: Service[] = [
   {
@@ -182,6 +214,9 @@ interface CalendarContextType {
   services: Service[];
   settings: BusinessSettings;
   isAdminAuthenticated: boolean;
+  isSyncing: boolean;
+  lastSyncedAt: Date | null;
+  syncWithCloud: () => Promise<void>;
   loginAdmin: (pin: string) => boolean;
   logoutAdmin: () => void;
   bookAppointment: (data: {
@@ -256,6 +291,9 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   });
 
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+
   // Sync to local storage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(appointments));
@@ -272,6 +310,77 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
   }, [settings]);
+
+  // Cloud Synchronization function (Bidirectional)
+  const syncWithCloud = async () => {
+    setIsSyncing(true);
+    try {
+      const [cloudApts, cloudBlocked, cloudSettings] = await Promise.all([
+        fetchCloudData<Appointment[]>('appointments'),
+        fetchCloudData<BlockedSlot[]>('blocked_slots'),
+        fetchCloudData<BusinessSettings>('settings'),
+      ]);
+
+      if (cloudApts && Array.isArray(cloudApts) && cloudApts.length > 0) {
+        setAppointments((localPrev) => {
+          const map = new Map<string, Appointment>();
+          localPrev.forEach((a) => map.set(a.id, a));
+          cloudApts.forEach((a) => map.set(a.id, a));
+          const merged = Array.from(map.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          if (merged.length > cloudApts.length) {
+            saveCloudData('appointments', merged);
+          }
+          return merged;
+        });
+      } else {
+        // If cloud was empty, upload local appointments to seed it
+        setAppointments((current) => {
+          if (current.length > 0) {
+            saveCloudData('appointments', current);
+          }
+          return current;
+        });
+      }
+
+      if (cloudBlocked && Array.isArray(cloudBlocked)) {
+        setBlockedSlots(cloudBlocked);
+      }
+
+      if (cloudSettings && typeof cloudSettings === 'object' && cloudSettings.adminPin) {
+        setSettings((prev) => ({ ...prev, ...cloudSettings }));
+      }
+
+      setLastSyncedAt(new Date());
+    } catch (e) {
+      console.warn('[CloudDB] Sync notice:', e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Background Cloud Poller (every 4 seconds) & on window focus
+  useEffect(() => {
+    syncWithCloud();
+
+    const interval = setInterval(() => {
+      syncWithCloud();
+    }, 4000);
+
+    const handleFocus = () => {
+      syncWithCloud();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, []);
 
   const loginAdmin = (pin: string): boolean => {
     if (pin === settings.adminPin) {
@@ -339,38 +448,57 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       createdAt: new Date().toISOString(),
     };
 
-    setAppointments((prev) => [newAppointment, ...prev]);
+    setAppointments((prev) => {
+      const updated = [newAppointment, ...prev.filter((a) => a.id !== newAppointment.id)];
+      // Push immediately to cloud so Admin sees it in seconds
+      fetchCloudData<Appointment[]>('appointments')
+        .then((cloudApts) => {
+          const list = Array.isArray(cloudApts) ? cloudApts : [];
+          const merged = [newAppointment, ...list.filter((a) => a.id !== newAppointment.id)];
+          saveCloudData('appointments', merged);
+        })
+        .catch(() => {
+          saveCloudData('appointments', updated);
+        });
+      return updated;
+    });
+
     return newAppointment;
   };
 
   const cancelAppointment = (id: string, reason?: string) => {
-    setAppointments((prev) =>
-      prev.map((apt) =>
+    setAppointments((prev) => {
+      const updated = prev.map((apt) =>
         apt.id === id
           ? {
               ...apt,
-              status: 'anuluar',
+              status: 'anuluar' as const,
               clientNotes: reason
                 ? `${apt.clientNotes ? apt.clientNotes + ' | ' : ''}Anuluar: ${reason}`
                 : apt.clientNotes,
             }
           : apt
-      )
-    );
+      );
+      saveCloudData('appointments', updated);
+      return updated;
+    });
   };
 
   const updateAppointmentStatus = (id: string, status: Appointment['status']) => {
-    setAppointments((prev) =>
-      prev.map((apt) => (apt.id === id ? { ...apt, status } : apt))
-    );
+    setAppointments((prev) => {
+      const updated = prev.map((apt) => (apt.id === id ? { ...apt, status } : apt));
+      saveCloudData('appointments', updated);
+      return updated;
+    });
   };
 
   const toggleSlotBlock = (date: string, time: string, reason?: string) => {
     setBlockedSlots((prev) => {
       const exists = prev.some((b) => b.date === date && b.time === time);
+      let updated: BlockedSlot[];
       if (exists) {
         // Free the slot
-        return prev.filter((b) => !(b.date === date && b.time === time));
+        updated = prev.filter((b) => !(b.date === date && b.time === time));
       } else {
         // Block the slot
         const newBlock: BlockedSlot = {
@@ -379,8 +507,10 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           time,
           reason: reason || 'Pushim / Bllokuar nga berberi',
         };
-        return [...prev, newBlock];
+        updated = [...prev, newBlock];
       }
+      saveCloudData('blocked_slots', updated);
+      return updated;
     });
   };
 
@@ -396,7 +526,11 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateSettings = (newSettings: Partial<BusinessSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
+    setSettings((prev) => {
+      const updated = { ...prev, ...newSettings };
+      saveCloudData('settings', updated);
+      return updated;
+    });
   };
 
   const updateServices = (newServices: Service[]) => {
@@ -416,14 +550,19 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const resetAllData = () => {
-    setAppointments(getInitialAppointments());
-    setBlockedSlots(getInitialBlockedSlots());
+    const defaultApts = getInitialAppointments();
+    const defaultBlocked = getInitialBlockedSlots();
+    setAppointments(defaultApts);
+    setBlockedSlots(defaultBlocked);
     setServices(DEFAULT_SERVICES);
     setSettings(DEFAULT_SETTINGS);
     localStorage.removeItem(STORAGE_KEYS.APPOINTMENTS);
     localStorage.removeItem(STORAGE_KEYS.BLOCKED_SLOTS);
     localStorage.removeItem(STORAGE_KEYS.SERVICES);
     localStorage.removeItem(STORAGE_KEYS.SETTINGS);
+    saveCloudData('appointments', defaultApts);
+    saveCloudData('blocked_slots', defaultBlocked);
+    saveCloudData('settings', DEFAULT_SETTINGS);
   };
 
   const findAppointmentsByQuery = (query: string): Appointment[] => {
@@ -446,6 +585,9 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         services,
         settings,
         isAdminAuthenticated,
+        isSyncing,
+        lastSyncedAt,
+        syncWithCloud,
         loginAdmin,
         logoutAdmin,
         bookAppointment,

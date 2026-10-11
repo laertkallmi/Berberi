@@ -644,7 +644,11 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
               <h2 className="text-2xl font-cinzel font-bold text-white">
                 Takimi u Rezervua me Sukses!
               </h2>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+              <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>U ruajt në sistemin e sallonit & në kalendarin e berberit</span>
+              </div>
+              <p className="text-xs text-slate-400 mt-2 max-w-sm mx-auto">
                 Karrigia juaj është e rezervuar. Ju lutem paraqituni 5 minuta para orarit.
               </p>
             </div>
@@ -710,14 +714,14 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               <a
                 href={`https://wa.me/${settings.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
-                  `Përshëndetje! Rezervova orarin e prerjes në orën ${confirmedBooking.time} më datë ${confirmedBooking.date} pranë ${settings.name}.\nKodi: ${confirmedBooking.bookingCode}\nShërbimi: ${confirmedBooking.serviceName}\nEmri: ${confirmedBooking.clientName}`
+                  `Përshëndetje! Rezervova orarin e prerjes në orën ${confirmedBooking.time} më datë ${confirmedBooking.date} pranë ${settings.name}.\nKodi: ${confirmedBooking.bookingCode}\nShërbimi: ${confirmedBooking.serviceName}\nEmri: ${confirmedBooking.clientName}\nTelefoni: ${confirmedBooking.clientPhone}`
                 )}`}
                 target="_blank"
                 rel="noreferrer"
-                className="p-3 rounded-xl bg-emerald-950/40 hover:bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+                className="p-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 transition-all active:scale-95"
               >
-                <MessageSquare className="w-4 h-4 text-emerald-400" />
-                <span>Njofto në WhatsApp</span>
+                <MessageSquare className="w-4 h-4 text-white" />
+                <span>Dërgo Konfirmimin në WhatsApp</span>
               </a>
 
               <button

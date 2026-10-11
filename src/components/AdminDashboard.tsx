@@ -30,6 +30,7 @@ import {
   Scissors,
   ExternalLink,
   Link2,
+  RefreshCw,
 } from 'lucide-react';
 import { ManualBookingModal } from './ManualBookingModal';
 
@@ -51,6 +52,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToClient }
     addService,
     deleteService,
     resetAllData,
+    isSyncing,
+    syncWithCloud,
   } = useCalendar();
 
   const [activeTab, setActiveTab] = useState<AdminTab>('today');
@@ -230,7 +233,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToClient }
               </p>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={() => syncWithCloud()}
+                disabled={isSyncing}
+                className="px-3.5 py-2 rounded-xl bg-[#131b17] hover:bg-[#1a2520] border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                title="Sinkronizuar me Cloud. Klikoni për të marrë rezervimet e reja menjëherë."
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? 'Po përditësohet...' : 'Sinkronizim Live'}</span>
+              </button>
               <button
                 onClick={handleCopyBioLink}
                 className="px-3.5 py-2 rounded-xl bg-[#171a23] hover:bg-[#202532] border border-amber-400/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
