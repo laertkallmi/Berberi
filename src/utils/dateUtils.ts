@@ -1,3 +1,5 @@
+import { Language } from '../types';
+
 export const ALBANIAN_MONTHS = [
   'Janar',
   'Shkurt',
@@ -25,6 +27,33 @@ export const ALBANIAN_DAYS = [
 
 export const ALBANIAN_DAYS_SHORT = ['Die', 'Hën', 'Mar', 'Mër', 'Enj', 'Pre', 'Sht'];
 
+export const GERMAN_MONTHS = [
+  'Januar',
+  'Februar',
+  'März',
+  'April',
+  'Mai',
+  'Juni',
+  'Juli',
+  'August',
+  'September',
+  'Oktober',
+  'November',
+  'Dezember',
+];
+
+export const GERMAN_DAYS = [
+  'Sonntag',
+  'Montag',
+  'Dienstag',
+  'Mittwoch',
+  'Donnerstag',
+  'Freitag',
+  'Samstag',
+];
+
+export const GERMAN_DAYS_SHORT = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+
 /**
  * Formats a Date object to YYYY-MM-DD
  */
@@ -51,14 +80,20 @@ export function parseISODate(dateStr: string): Date {
 }
 
 /**
- * Formats date into readable Albanian string (e.g., "E Shtunë, 10 Tetor 2026")
+ * Formats date into readable localized string
  */
-export function formatAlbanianDate(dateStr: string, includeYear = true): string {
+export function formatDateByLang(dateStr: string, lang: Language = 'sq', includeYear = true): string {
   const d = parseISODate(dateStr);
-  const dayName = ALBANIAN_DAYS[d.getDay()];
+  const dayName = lang === 'de' ? GERMAN_DAYS[d.getDay()] : ALBANIAN_DAYS[d.getDay()];
   const dayNum = d.getDate();
-  const monthName = ALBANIAN_MONTHS[d.getMonth()];
+  const monthName = lang === 'de' ? GERMAN_MONTHS[d.getMonth()] : ALBANIAN_MONTHS[d.getMonth()];
   const year = d.getFullYear();
+
+  if (lang === 'de') {
+    return includeYear
+      ? `${dayName}, ${dayNum}. ${monthName} ${year}`
+      : `${dayName}, ${dayNum}. ${monthName}`;
+  }
 
   return includeYear
     ? `${dayName}, ${dayNum} ${monthName} ${year}`
@@ -66,13 +101,20 @@ export function formatAlbanianDate(dateStr: string, includeYear = true): string 
 }
 
 /**
- * Short Albanian format (e.g., "10 Tetor")
+ * Backwards compatible alias for formatAlbanianDate
  */
-export function formatAlbanianShort(dateStr: string): string {
+export function formatAlbanianDate(dateStr: string, includeYear = true, lang: Language = 'sq'): string {
+  return formatDateByLang(dateStr, lang, includeYear);
+}
+
+/**
+ * Short format (e.g., "10 Tetor" or "10. Oktober")
+ */
+export function formatAlbanianShort(dateStr: string, lang: Language = 'sq'): string {
   const d = parseISODate(dateStr);
   const dayNum = d.getDate();
-  const monthName = ALBANIAN_MONTHS[d.getMonth()];
-  return `${dayNum} ${monthName}`;
+  const monthName = lang === 'de' ? GERMAN_MONTHS[d.getMonth()] : ALBANIAN_MONTHS[d.getMonth()];
+  return lang === 'de' ? `${dayNum}. ${monthName}` : `${dayNum} ${monthName}`;
 }
 
 /**
@@ -94,17 +136,24 @@ export function addDays(dateStr: string, days: number): string {
 /**
  * Generates an array of upcoming dates starting from a given date
  */
-export function getUpcomingDates(startDateStr: string, count = 14): { dateStr: string; dayName: string; dayNum: number; monthName: string; isWeekend: boolean }[] {
+export function getUpcomingDates(
+  startDateStr: string,
+  count = 14,
+  lang: Language = 'sq'
+): { dateStr: string; dayName: string; dayNum: number; monthName: string; isWeekend: boolean }[] {
   const results = [];
+  const daysShort = lang === 'de' ? GERMAN_DAYS_SHORT : ALBANIAN_DAYS_SHORT;
+  const months = lang === 'de' ? GERMAN_MONTHS : ALBANIAN_MONTHS;
+
   for (let i = 0; i < count; i++) {
     const dStr = addDays(startDateStr, i);
     const d = parseISODate(dStr);
     const dayIndex = d.getDay();
     results.push({
       dateStr: dStr,
-      dayName: ALBANIAN_DAYS_SHORT[dayIndex],
+      dayName: daysShort[dayIndex],
       dayNum: d.getDate(),
-      monthName: ALBANIAN_MONTHS[d.getMonth()],
+      monthName: months[d.getMonth()],
       isWeekend: dayIndex === 0 || dayIndex === 6,
     });
   }
@@ -147,7 +196,6 @@ export function generateTimeSlots(
 
   let current = startMins;
   while (current + intervalMinutes <= endMins) {
-    // If inside lunch break, skip
     if (
       breakStartMins !== null &&
       breakEndMins !== null &&

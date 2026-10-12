@@ -55,5 +55,6 @@ export interface BusinessSettings {
 
 export type ActiveView = 'client' | 'admin';
 export type AdminTab = 'today' | 'calendar' | 'all' | 'settings';
+export type Language = 'sq' | 'de';
 
 

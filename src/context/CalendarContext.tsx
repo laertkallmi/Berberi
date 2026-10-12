@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Appointment, BlockedSlot, BusinessSettings, Service } from '../types';
+import { Appointment, BlockedSlot, BusinessSettings, Service, Language } from '../types';
 import { generateBookingCode, getTodayDateStr, addDays } from '../utils/dateUtils';
+import { TRANSLATIONS, formatPriceByLang } from '../utils/translations';
 
 const STORAGE_KEYS = {
   APPOINTMENTS: 'takimet_solo_barber_v5_appointments',
@@ -214,6 +215,10 @@ interface CalendarContextType {
   services: Service[];
   settings: BusinessSettings;
   isAdminAuthenticated: boolean;
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  t: (key: string) => string;
+  formatPrice: (amount: number, serviceId?: string) => string;
   isSyncing: boolean;
   lastSyncedAt: Date | null;
   syncWithCloud: () => Promise<void>;
@@ -290,6 +295,33 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return false;
     }
   });
+
+  const [language, setLanguageState] = useState<Language>(() => {
+    try {
+      const saved = localStorage.getItem('takimet_language_v1');
+      if (saved === 'de' || saved === 'sq') return saved;
+      return 'sq';
+    } catch {
+      return 'sq';
+    }
+  });
+
+  const setLanguage = (newLang: Language) => {
+    setLanguageState(newLang);
+    try {
+      localStorage.setItem('takimet_language_v1', newLang);
+    } catch {
+      // ignore
+    }
+  };
+
+  const t = (key: string): string => {
+    return TRANSLATIONS[language]?.[key] ?? TRANSLATIONS['sq']?.[key] ?? key;
+  };
+
+  const formatPrice = (amount: number, serviceId?: string): string => {
+    return formatPriceByLang(amount, language, serviceId, settings.currency);
+  };
 
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
@@ -585,6 +617,10 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         services,
         settings,
         isAdminAuthenticated,
+        language,
+        setLanguage,
+        t,
+        formatPrice,
         isSyncing,
         lastSyncedAt,
         syncWithCloud,

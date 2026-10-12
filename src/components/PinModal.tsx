@@ -9,7 +9,7 @@ interface PinModalProps {
 }
 
 export const PinModal: React.FC<PinModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const { loginAdmin } = useCalendar();
+  const { loginAdmin, t } = useCalendar();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
 
@@ -22,7 +22,7 @@ export const PinModal: React.FC<PinModalProps> = ({ isOpen, onClose, onSuccess }
       setPin('');
       onSuccess();
     } else {
-      setError('PIN i pasaktë. Ju lutem provoni përsëri.');
+      setError(t('pinError'));
     }
   };
 
@@ -52,10 +52,10 @@ export const PinModal: React.FC<PinModalProps> = ({ isOpen, onClose, onSuccess }
             <Lock className="w-6 h-6" />
           </div>
           <h3 className="text-lg font-cinzel font-semibold text-white">
-            Paneli Administrativ
+            {t('pinModalTitle')}
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            Vendosni kodin PIN për të hyrë në menaxhimin e orareve dhe takimeve.
+            {t('pinModalSubtitle')}
           </p>
         </div>
 
@@ -100,7 +100,7 @@ export const PinModal: React.FC<PinModalProps> = ({ isOpen, onClose, onSuccess }
               onClick={() => setPin('')}
               className="py-3 rounded-xl bg-[#161922] hover:bg-[#1e2330] border border-[#232733] text-xs font-medium text-slate-400 active:scale-95 transition-all cursor-pointer"
             >
-              Pastro
+              {t('pinClearBtn')}
             </button>
             <button
               type="button"
@@ -114,7 +114,7 @@ export const PinModal: React.FC<PinModalProps> = ({ isOpen, onClose, onSuccess }
               onClick={handleDelete}
               className="py-3 rounded-xl bg-[#161922] hover:bg-[#1e2330] border border-[#232733] text-xs font-medium text-slate-400 active:scale-95 transition-all cursor-pointer"
             >
-              Fshi
+              {t('pinDeleteBtn')}
             </button>
           </div>
 
@@ -123,7 +123,7 @@ export const PinModal: React.FC<PinModalProps> = ({ isOpen, onClose, onSuccess }
             disabled={pin.length < 4}
             className="w-full mt-4 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-semibold text-sm transition-all shadow-lg shadow-amber-500/10 cursor-pointer"
           >
-            Hyr në Panel
+            {t('pinEnterBtn')}
           </button>
         </form>
       </div>

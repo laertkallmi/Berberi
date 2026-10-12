@@ -5,9 +5,13 @@ import {
   getTodayDateStr,
   getUpcomingDates,
   generateTimeSlots,
-  formatAlbanianDate,
+  formatDateByLang,
   formatAlbanianShort,
 } from '../utils/dateUtils';
+import {
+  getLocalizedServiceName,
+  getLocalizedServiceDesc,
+} from '../utils/translations';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -41,6 +45,9 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
     services,
     bookAppointment,
     getSlotStatus,
+    language,
+    t,
+    formatPrice,
   } = useCalendar();
 
   // Booking Flow Steps: 1: Service, 2: Date & Time, 3: Personal Info, 4: Confirmed
@@ -62,8 +69,8 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
 
   // Dates for horizontal picker (next 14 days)
   const availableDates = useMemo(() => {
-    return getUpcomingDates(getTodayDateStr(), 14);
-  }, []);
+    return getUpcomingDates(getTodayDateStr(), 14, language);
+  }, [language]);
 
   // Time slots for the selected date
   const timeSlots = useMemo(() => {
@@ -87,12 +94,12 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
   const validateStep3 = () => {
     const errors: Record<string, string> = {};
     if (!clientName.trim()) {
-      errors.name = 'Ju lutem shkruani emrin dhe mbiemrin';
+      errors.name = t('nameRequiredError');
     }
     if (!clientPhone.trim()) {
-      errors.phone = 'Numri i telefonit është i detyrueshëm për konfirmim';
-    } else if (clientPhone.trim().length < 8) {
-      errors.phone = 'Ju lutem jepni një numër të saktë telefoni';
+      errors.phone = t('phoneRequiredError');
+    } else if (clientPhone.trim().length < 7) {
+      errors.phone = t('phoneInvalidError');
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -118,26 +125,28 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
   };
 
   const handleDownloadICS = (apt: Appointment) => {
-    const [year, month, day] = apt.date.split('-').map(Number);
-    const [hours, mins] = apt.time.split(':').map(Number);
-    const startDate = new Date(year, month - 1, day, hours, mins);
-    const endDate = new Date(startDate.getTime() + apt.durationMinutes * 60000);
+    const title = `${getLocalizedServiceName(selectedService || services[0], language)} - ${displayName}`;
+    const desc = `${language === 'de' ? 'Terminbuchung' : 'Rezervim takimi'} (${apt.bookingCode})`;
+    const [startH, startM] = apt.time.split(':').map(Number);
+    const startDate = new Date(`${apt.date}T00:00:00`);
+    startDate.setHours(startH, startM, 0, 0);
 
-    const pad = (n: number) => String(n).padStart(2, '0');
+    const endDate = new Date(startDate.getTime() + (apt.durationMinutes || 30) * 60000);
+
     const formatICSDate = (d: Date) =>
-      `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+      d.toISOString().replace(/-|:|\.\d+/g, '');
 
     const icsContent = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//Sallon Berberi//Kalendari Online//SQ',
+      'PRODID:-//Takimet Barber//SQ',
       'BEGIN:VEVENT',
-      `UID:${apt.id}@sallonberberi.al`,
+      `UID:${apt.id}@barbershop`,
       `DTSTAMP:${formatICSDate(new Date())}`,
       `DTSTART:${formatICSDate(startDate)}`,
       `DTEND:${formatICSDate(endDate)}`,
-      `SUMMARY:Prerje Flokësh: ${apt.serviceName} - ${settings.name}`,
-      `DESCRIPTION:Kodi i rezervimit: ${apt.bookingCode}\\nShërbimi: ${apt.serviceName}\\nKlienti: ${apt.clientName}\\nAdresa: ${settings.address}`,
+      `SUMMARY:${title}`,
+      `DESCRIPTION:${desc}`,
       `LOCATION:${settings.address}, ${settings.city}`,
       'STATUS:CONFIRMED',
       'END:VEVENT',
@@ -145,14 +154,12 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
     ].join('\r\n');
 
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `rezervim-${apt.bookingCode}.ics`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute('download', `takim-${apt.bookingCode}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const resetFlow = () => {
@@ -164,6 +171,14 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
     setConfirmedBooking(null);
     setCurrentStep(1);
   };
+
+  const displayName = language === 'de' && settings.name === 'Sallon Berberi'
+    ? 'Barbershop'
+    : (settings.name || (language === 'de' ? 'Barbershop' : 'Sallon Berberi'));
+
+  const displayTagline = language === 'de' && settings.tagline.includes('prerjes online')
+    ? t('heroTagline')
+    : (settings.tagline || t('heroTagline'));
 
   return (
     <div className="min-h-screen bg-[#090a0d] pb-24 text-slate-200">
@@ -179,10 +194,10 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-cinzel font-semibold tracking-wide text-white">
-            {settings.name || 'Sallon Berberi'}
+            {displayName}
           </h1>
           <p className="mt-2 text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
-            {settings.tagline || 'Rezervoni orarin tuaj të prerjes online në pak sekonda. Pa pritje në radhë.'}
+            {displayTagline}
           </p>
 
           {/* Quick Bio Info Tags */}
@@ -214,14 +229,16 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
           <div className="mt-6 flex items-center justify-center">
             <a
               href={`https://wa.me/${settings.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
-                `Përshëndetje! Dëshiroj të pyes për rezervim prerjeje flokësh pranë ${settings.name}.`
+                language === 'de'
+                  ? `Hallo! Ich möchte nach einem Termin bei ${displayName} fragen.`
+                  : `Përshëndetje! Dëshiroj të pyes për rezervim prerjeje flokësh pranë ${settings.name}.`
               )}`}
               target="_blank"
               rel="noreferrer"
               className="px-4 py-2 text-xs text-emerald-300 bg-emerald-950/30 hover:bg-emerald-950/50 border border-emerald-800/40 rounded-xl transition-colors flex items-center gap-2 shadow-sm"
             >
               <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Kontakto në WhatsApp</span>
+              <span>{t('contactWhatsApp')}</span>
             </a>
           </div>
         </div>
@@ -233,10 +250,10 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
         <div className="mb-8">
           <div className="flex items-center justify-between max-w-md mx-auto">
             {[
-              { num: 1, title: 'Shërbimi' },
-              { num: 2, title: 'Ora & Data' },
-              { num: 3, title: 'Të Dhënat' },
-              { num: 4, title: 'Konfirmimi' },
+              { num: 1, title: t('step1Tab') },
+              { num: 2, title: t('step2Tab') },
+              { num: 3, title: t('step3Tab') },
+              { num: 4, title: t('step4Tab') },
             ].map((step) => {
               const isActive = currentStep === step.num;
               const isPast = currentStep > step.num;
@@ -271,16 +288,20 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
           <div ref={servicesRef} className="space-y-6">
             <div className="text-center sm:text-left">
               <h2 className="text-xl font-cinzel font-semibold text-white">
-                1. Zgjidhni Shërbimin e Prerjes
+                {t('step1Title')}
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Zgjidhni shërbimin që dëshironi të rezervoni për të parë oraret e lira të berberit.
+                {t('step1Subtitle')}
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               {services.map((service) => {
                 const isSelected = selectedService?.id === service.id;
+                const localizedName = getLocalizedServiceName(service, language);
+                const localizedDesc = getLocalizedServiceDesc(service, language);
+                const priceFormatted = formatPrice(service.price, service.id);
+
                 return (
                   <button
                     key={service.id}
@@ -294,15 +315,15 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-semibold text-white tracking-wide">
-                          {service.name}
+                          {localizedName}
                         </h3>
                         <p className="mt-1 text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                          {service.description}
+                          {localizedDesc}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
                         <span className="text-sm font-bold text-amber-400 tabular-nums">
-                          {service.price.toLocaleString()} {settings.currency}
+                          {priceFormatted}
                         </span>
                         <div className="text-[11px] text-slate-400 flex items-center justify-end gap-1 mt-0.5 tabular-nums">
                           <Clock className="w-3 h-3 text-slate-500" />
@@ -326,7 +347,7 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                 }}
                 className="w-full sm:w-auto px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
-                <span>Vazhdo te Zgjedhja e Orarit</span>
+                <span>{language === 'de' ? 'Weiter zur Terminauswahl' : 'Vazhdo te Zgjedhja e Orarit'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -339,10 +360,14 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-cinzel font-semibold text-white">
-                  2. Zgjidhni Datën dhe Orën
+                  {t('step2Title')}
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  Shërbimi: <span className="text-slate-200 font-medium">{selectedService?.name}</span> ({selectedService?.durationMinutes} min)
+                  {t('serviceSummaryLabel')}{' '}
+                  <span className="text-slate-200 font-medium">
+                    {selectedService ? getLocalizedServiceName(selectedService, language) : ''}
+                  </span>{' '}
+                  ({selectedService?.durationMinutes} min)
                 </p>
               </div>
               <button
@@ -350,14 +375,14 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                 className="text-xs text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Ndrysho Shërbimin</span>
+                <span>{language === 'de' ? 'Leistung ändern' : 'Ndrysho Shërbimin'}</span>
               </button>
             </div>
 
             {/* Horizontal Day Scroller */}
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-2">
-                Zgjidhni Datën:
+                {t('dateLabel')}
               </label>
               <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
                 {availableDates.map((d) => {
@@ -391,7 +416,7 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                           isSelected ? 'text-slate-800' : 'text-slate-400'
                         }`}
                       >
-                        {isTodayDate ? 'Sot' : d.monthName.slice(0, 3)}
+                        {isTodayDate ? t('today') : d.monthName.slice(0, 3)}
                       </div>
                     </button>
                   );
@@ -405,17 +430,17 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                 <div className="flex items-center gap-2">
                   <CalendarIcon className="w-4 h-4 text-amber-400" />
                   <span className="text-sm font-medium text-white">
-                    {formatAlbanianDate(selectedDate)}
+                    {formatDateByLang(selectedDate, language)}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs">
                   <span className="flex items-center gap-1.5 text-slate-400">
                     <span className="w-2.5 h-2.5 rounded-sm bg-[#161a23] border border-[#2f3544] inline-block" />
-                    <span>I Lirë</span>
+                    <span>{t('free')}</span>
                   </span>
                   <span className="flex items-center gap-1.5 text-slate-400">
                     <span className="w-2.5 h-2.5 rounded-sm bg-[#221c1f] border border-[#3e272a] inline-block" />
-                    <span>I Zënë</span>
+                    <span>{t('booked')}</span>
                   </span>
                 </div>
               </div>
@@ -431,13 +456,13 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                       <div
                         key={time}
                         className="py-2.5 px-2 rounded-lg bg-[#141215] border border-[#271d22] text-center text-slate-600 cursor-not-allowed select-none"
-                        title={status === 'bllokuar' ? 'Orar i bllokuar / pushim' : 'Tashmë i rezervuar'}
+                        title={status === 'bllokuar' ? t('blocked') : t('booked')}
                       >
                         <span className="text-xs font-mono tabular-nums line-through opacity-70">
                           {time}
                         </span>
                         <div className="text-[9px] uppercase tracking-wider text-rose-500/60 mt-0.5">
-                          {status === 'bllokuar' ? 'Pushim' : 'I Zënë'}
+                          {status === 'bllokuar' ? t('blocked') : t('booked')}
                         </div>
                       </div>
                     );
@@ -461,7 +486,7 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                           isSelected ? 'text-slate-900 font-semibold' : 'text-emerald-400'
                         }`}
                       >
-                        I Lirë
+                        {t('free')}
                       </div>
                     </button>
                   );
@@ -470,9 +495,9 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
 
               {timeSlots.filter((t) => t.status === 'lire').length === 0 && (
                 <div className="py-8 text-center text-slate-400">
-                  <p className="text-sm">Nuk ka orare të lira për këtë datë.</p>
+                  <p className="text-sm">{t('noSlotsAvailable')}</p>
                   <p className="text-xs text-slate-500 mt-1">
-                    Ju lutem zgjidhni një ditë tjetër nga kalendari më lart.
+                    {t('chooseOtherDate')}
                   </p>
                 </div>
               )}
@@ -485,14 +510,14 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                 className="px-4 py-2 text-xs text-slate-400 hover:text-white flex items-center gap-1.5 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span>Kthehu mbrapa</span>
+                <span>{language === 'de' ? 'Zurück' : 'Kthehu mbrapa'}</span>
               </button>
               <button
                 disabled={!selectedTime}
                 onClick={() => setCurrentStep(3)}
                 className="px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
-                <span>Vazhdo te Të Dhënat</span>
+                <span>{language === 'de' ? 'Weiter zu den Angaben' : 'Vazhdo te Të Dhënat'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -505,10 +530,10 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-cinzel font-semibold text-white">
-                  3. Të Dhënat Tuaja Personale
+                  {t('step3Title')}
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  Plotësoni të dhënat tuaja për të rezervuar karrigen e berberit.
+                  {t('step3Subtitle')}
                 </p>
               </div>
               <button
@@ -516,26 +541,28 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                 className="text-xs text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Ndrysho Orën</span>
+                <span>{language === 'de' ? 'Zeit ändern' : 'Ndrysho Orën'}</span>
               </button>
             </div>
 
             {/* Booking Summary Pill */}
             <div className="p-4 rounded-xl bg-[#13161f] border border-[#222733] flex flex-wrap items-center justify-between gap-4 text-xs">
               <div>
-                <span className="text-slate-400">Shërbimi: </span>
-                <strong className="text-white ml-1">{selectedService?.name}</strong>
-              </div>
-              <div>
-                <span className="text-slate-400">Data & Ora: </span>
-                <strong className="text-amber-400 ml-1">
-                  {formatAlbanianShort(selectedDate)}, ora {selectedTime}
+                <span className="text-slate-400">{t('serviceSummaryLabel')} </span>
+                <strong className="text-white ml-1">
+                  {selectedService ? getLocalizedServiceName(selectedService, language) : ''}
                 </strong>
               </div>
               <div>
-                <span className="text-slate-400">Çmimi: </span>
+                <span className="text-slate-400">{t('dateTimeSummaryLabel')} </span>
+                <strong className="text-amber-400 ml-1">
+                  {formatAlbanianShort(selectedDate, language)}, {language === 'de' ? `${selectedTime} Uhr` : `ora ${selectedTime}`}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-400">{language === 'de' ? 'Preis:' : 'Çmimi:'} </span>
                 <strong className="text-white ml-1 tabular-nums">
-                  {selectedService?.price.toLocaleString()} {settings.currency}
+                  {selectedService ? formatPrice(selectedService.price, selectedService.id) : ''}
                 </strong>
               </div>
             </div>
@@ -545,12 +572,12 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Emri & Mbiemri *</span>
+                  <span>{t('fullNameLabel')}</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="p.sh. Alban D."
+                  placeholder={t('fullNamePlaceholder')}
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
                   className={`w-full px-4 py-2.5 rounded-xl bg-[#11131a] border text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/40 ${
@@ -565,12 +592,12 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Numri i Telefonit / WhatsApp *</span>
+                  <span>{t('phoneLabel')}</span>
                 </label>
                 <input
                   type="tel"
                   required
-                  placeholder="p.sh. +355 69 000 0000"
+                  placeholder={t('phonePlaceholder')}
                   value={clientPhone}
                   onChange={(e) => setClientPhone(e.target.value)}
                   className={`w-full px-4 py-2.5 rounded-xl bg-[#11131a] border text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/40 ${
@@ -581,18 +608,18 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                   <p className="text-[11px] text-rose-400 mt-1">{formErrors.phone}</p>
                 )}
                 <p className="text-[10px] text-slate-500 mt-1">
-                  Do t'ju dërgojmë konfirmimin e orarit të prerjes në këtë numër.
+                  {t('phoneNote')}
                 </p>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Email (Opsionale)</span>
+                  <span>{t('emailLabel')}</span>
                 </label>
                 <input
                   type="email"
-                  placeholder="klienti@email.com"
+                  placeholder={t('emailPlaceholder')}
                   value={clientEmail}
                   onChange={(e) => setClientEmail(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl bg-[#11131a] border border-[#242936] text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/40"
@@ -602,11 +629,11 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Kërkesa ose Shënime Shtesë (Opsionale)</span>
+                  <span>{t('notesLabel')}</span>
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="p.sh. Preferoj low skin fade, rruajtje me brisk klasik..."
+                  placeholder={t('notesPlaceholder')}
                   value={clientNotes}
                   onChange={(e) => setClientNotes(e.target.value)}
                   className="w-full px-4 py-2 rounded-xl bg-[#11131a] border border-[#242936] text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/40 resize-none"
@@ -620,14 +647,14 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                   className="px-4 py-2 text-xs text-slate-400 hover:text-white flex items-center gap-1.5 cursor-pointer"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>Kthehu te orari</span>
+                  <span>{t('backToStep2')}</span>
                 </button>
                 <button
                   type="submit"
                   className="px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer transition-all active:scale-95"
                 >
                   <CheckCircle2 className="w-4 h-4 text-slate-950" />
-                  <span>Konfirmo Rezervimin Tani</span>
+                  <span>{t('confirmBookingBtn')}</span>
                 </button>
               </div>
             </form>
@@ -642,14 +669,14 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <h2 className="text-2xl font-cinzel font-bold text-white">
-                Takimi u Rezervua me Sukses!
+                {t('step4SuccessTitle')}
               </h2>
               <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>U ruajt në sistemin e sallonit & në kalendarin e berberit</span>
+                <span>{t('step4CloudBadge')}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2 max-w-sm mx-auto">
-                Karrigia juaj është e rezervuar. Ju lutem paraqituni 5 minuta para orarit.
+                {t('step4Note')}
               </p>
             </div>
 
@@ -660,7 +687,7 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
               <div className="flex items-center justify-between border-b border-[#1f2430] pb-4 mb-4">
                 <div>
                   <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">
-                    Kodi i Rezervimit
+                    {t('bookingCodeLabel')}
                   </span>
                   <div className="text-xl font-mono font-bold text-amber-400 tracking-wider">
                     {confirmedBooking.bookingCode}
@@ -668,35 +695,41 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-[11px] font-medium text-emerald-400 bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-800/40">
-                    I Konfirmuar
+                    {t('statusConfirmedBadge')}
                   </span>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div>
-                  <span className="text-slate-400">Shërbimi:</span>
+                  <span className="text-slate-400">{t('serviceSummaryLabel')}</span>
                   <p className="text-sm font-semibold text-white mt-0.5">
-                    {confirmedBooking.serviceName}
+                    {selectedService ? getLocalizedServiceName(selectedService, language) : confirmedBooking.serviceName}
                   </p>
                 </div>
                 <div>
-                  <span className="text-slate-400">Data dhe Ora:</span>
+                  <span className="text-slate-400">{t('dateTimeSummaryLabel')}</span>
                   <p className="text-sm font-semibold text-amber-400 mt-0.5">
-                    {formatAlbanianDate(confirmedBooking.date)}, ora {confirmedBooking.time}
+                    {formatDateByLang(confirmedBooking.date, language)}, {language === 'de' ? `${confirmedBooking.time} Uhr` : `ora ${confirmedBooking.time}`}
                   </p>
                 </div>
                 <div>
-                  <span className="text-slate-400">Klienti:</span>
+                  <span className="text-slate-400">{t('clientSummaryLabel')}</span>
                   <p className="text-sm font-semibold text-white mt-0.5">
                     {confirmedBooking.clientName}
                   </p>
                   <p className="text-xs text-slate-400">{confirmedBooking.clientPhone}</p>
                 </div>
                 <div>
-                  <span className="text-slate-400">Vendi:</span>
+                  <span className="text-slate-400">{language === 'de' ? 'Preis:' : 'Çmimi:'}</span>
+                  <p className="text-sm font-semibold text-emerald-400 mt-0.5 tabular-nums">
+                    {formatPrice(confirmedBooking.price, confirmedBooking.serviceId)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-slate-400">{t('locationSummaryLabel')}</span>
                   <p className="text-sm font-semibold text-white mt-0.5">
-                    {settings.name}
+                    {displayName}
                   </p>
                   <p className="text-xs text-slate-400">{settings.address}, {settings.city}</p>
                 </div>
@@ -704,7 +737,7 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
 
               {confirmedBooking.clientNotes && (
                 <div className="mt-4 pt-4 border-t border-[#1f2430] text-xs">
-                  <span className="text-slate-400">Shënime:</span>
+                  <span className="text-slate-400">{t('notesSummaryLabel')}</span>
                   <p className="text-slate-300 mt-0.5">{confirmedBooking.clientNotes}</p>
                 </div>
               )}
@@ -714,14 +747,16 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               <a
                 href={`https://wa.me/${settings.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
-                  `Përshëndetje! Rezervova orarin e prerjes në orën ${confirmedBooking.time} më datë ${confirmedBooking.date} pranë ${settings.name}.\nKodi: ${confirmedBooking.bookingCode}\nShërbimi: ${confirmedBooking.serviceName}\nEmri: ${confirmedBooking.clientName}\nTelefoni: ${confirmedBooking.clientPhone}`
+                  language === 'de'
+                    ? `Hallo! Ich habe einen Termin um ${confirmedBooking.time} Uhr am ${formatDateByLang(confirmedBooking.date, language)} bei ${displayName} gebucht.\nCode: ${confirmedBooking.bookingCode}\nLeistung: ${selectedService ? getLocalizedServiceName(selectedService, language) : confirmedBooking.serviceName}\nPreis: ${formatPrice(confirmedBooking.price, confirmedBooking.serviceId)}\nKunde: ${confirmedBooking.clientName}\nTelefon: ${confirmedBooking.clientPhone}`
+                    : `Përshëndetje! Rezervova orarin e prerjes në orën ${confirmedBooking.time} më datë ${confirmedBooking.date} pranë ${settings.name}.\nKodi: ${confirmedBooking.bookingCode}\nShërbimi: ${confirmedBooking.serviceName}\nEmri: ${confirmedBooking.clientName}\nTelefoni: ${confirmedBooking.clientPhone}`
                 )}`}
                 target="_blank"
                 rel="noreferrer"
                 className="p-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 transition-all active:scale-95"
               >
                 <MessageSquare className="w-4 h-4 text-white" />
-                <span>Dërgo Konfirmimin në WhatsApp</span>
+                <span>{t('sendWhatsAppBtn')}</span>
               </a>
 
               <button
@@ -729,7 +764,7 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                 className="p-3 rounded-xl bg-[#141720] hover:bg-[#1a1e2b] border border-[#242936] text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 <CalendarPlus className="w-4 h-4 text-amber-400" />
-                <span>Shto në Kalendar (.ics)</span>
+                <span>{t('addToCalendarBtn')}</span>
               </button>
             </div>
 
@@ -738,7 +773,7 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
                 onClick={resetFlow}
                 className="text-xs text-slate-400 hover:text-white underline cursor-pointer"
               >
-                Rezervo një takim tjetër
+                {t('bookAnotherBtn')}
               </button>
             </div>
           </div>
@@ -746,13 +781,13 @@ export const ClientBookingView: React.FC<ClientBookingViewProps> = ({
 
         {/* Footer for Client view */}
         <div className="mt-16 pt-8 border-t border-[#161922] text-center text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} {settings.name || 'Sallon Berberi'}. Të gjitha të drejtat të rezervuara.</p>
+          <p>© {new Date().getFullYear()} {displayName}. {t('allRightsReserved')}</p>
           <div className="mt-2 flex items-center justify-center gap-4">
             <button
               onClick={onGoToAdmin}
               className="text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
             >
-              Paneli i Berberit
+              {t('navAdmin')}
             </button>
           </div>
         </div>

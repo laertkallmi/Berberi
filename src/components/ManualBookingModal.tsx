@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCalendar } from '../context/CalendarContext';
 import { getTodayDateStr } from '../utils/dateUtils';
+import { getLocalizedServiceName } from '../utils/translations';
 import { X, Calendar, Clock, User, Phone, CheckCircle2 } from 'lucide-react';
 
 interface ManualBookingModalProps {
@@ -16,7 +17,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   initialDate,
   initialTime,
 }) => {
-  const { services, bookAppointment, settings } = useCalendar();
+  const { services, bookAppointment, language, t, formatPrice } = useCalendar();
 
   const [serviceId, setServiceId] = useState(services[0]?.id || '');
   const [date, setDate] = useState(initialDate || getTodayDateStr());
@@ -32,9 +33,11 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientName.trim() || !clientPhone.trim()) {
-      setError('Emri dhe numri i telefonit janë të detyrueshme');
+      setError(language === 'de' ? 'Name und Telefonnummer sind Pflichtfelder' : 'Emri dhe numri i telefonit janë të detyrueshme');
       return;
     }
+
+    const notePrefix = language === 'de' ? '[Manuell eingetragen]' : '[Regjistruar me dorë]';
 
     bookAppointment({
       serviceId,
@@ -43,7 +46,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       clientName,
       clientPhone,
       clientEmail,
-      clientNotes: clientNotes ? `[Regjistruar me dorë]: ${clientNotes}` : '[Regjistruar me dorë]',
+      clientNotes: clientNotes ? `${notePrefix}: ${clientNotes}` : notePrefix,
     });
 
     onClose();
@@ -61,10 +64,10 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
 
         <div className="mb-6">
           <h3 className="text-lg font-cinzel font-semibold text-white">
-            Shto Takim me Dorë
+            {t('manualModalTitle')}
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            Regjistroni një takim të ri për klientë që vijnë në vend ose telefonojnë.
+            {t('manualModalSubtitle')}
           </p>
         </div>
 
@@ -77,7 +80,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">
-              Shërbimi
+              {t('manualServiceSelect')}
             </label>
             <select
               value={serviceId}
@@ -86,7 +89,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
             >
               {services.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({s.durationMinutes} min - {s.price.toLocaleString()} {settings.currency})
+                  {getLocalizedServiceName(s, language)} ({s.durationMinutes} min - {formatPrice(s.price, s.id)})
                 </option>
               ))}
             </select>
@@ -96,7 +99,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                <span>Data</span>
+                <span>{t('manualDateSelect')}</span>
               </label>
               <input
                 type="date"
@@ -110,7 +113,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-amber-400" />
-                <span>Ora</span>
+                <span>{t('manualTimeSelect')}</span>
               </label>
               <input
                 type="time"
@@ -125,12 +128,12 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1">
               <User className="w-3.5 h-3.5 text-amber-400" />
-              <span>Emri dhe Mbiemri i Klientit *</span>
+              <span>{t('manualClientName')}</span>
             </label>
             <input
               type="text"
               required
-              placeholder="p.sh. Besnik M."
+              placeholder={language === 'de' ? 'z.B. Max Mustermann' : 'p.sh. Besnik M.'}
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
               className="w-full px-3 py-2 rounded-xl bg-[#161922] border border-[#262c3a] text-sm text-white focus:outline-none focus:border-amber-400"
@@ -140,12 +143,12 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1">
               <Phone className="w-3.5 h-3.5 text-amber-400" />
-              <span>Numri i Telefonit *</span>
+              <span>{t('manualClientPhone')}</span>
             </label>
             <input
               type="tel"
               required
-              placeholder="p.sh. +355 69 000 0000"
+              placeholder={language === 'de' ? 'z.B. +49 178 6922244' : 'p.sh. +49 178 6922244'}
               value={clientPhone}
               onChange={(e) => setClientPhone(e.target.value)}
               className="w-full px-3 py-2 rounded-xl bg-[#161922] border border-[#262c3a] text-sm text-white focus:outline-none focus:border-amber-400"
@@ -154,11 +157,11 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
 
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">
-              Email (Opsionale)
+              {t('emailLabel')}
             </label>
             <input
               type="email"
-              placeholder="klienti@email.com"
+              placeholder={t('emailPlaceholder')}
               value={clientEmail}
               onChange={(e) => setClientEmail(e.target.value)}
               className="w-full px-3 py-2 rounded-xl bg-[#161922] border border-[#262c3a] text-sm text-white focus:outline-none focus:border-amber-400"
@@ -167,11 +170,11 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
 
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">
-              Shënime të brendshme
+              {t('manualNotes')}
             </label>
             <textarea
               rows={2}
-              placeholder="Shënim për stilin e prerjes ose preferencë e klientit..."
+              placeholder={language === 'de' ? 'Interne Notizen oder Wünsche des Kunden...' : 'Shënim për stilin e prerjes ose preferencë e klientit...'}
               value={clientNotes}
               onChange={(e) => setClientNotes(e.target.value)}
               className="w-full px-3 py-2 rounded-xl bg-[#161922] border border-[#262c3a] text-sm text-white focus:outline-none focus:border-amber-400 resize-none"
@@ -184,14 +187,14 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
               onClick={onClose}
               className="px-4 py-2.5 rounded-xl bg-[#161922] hover:bg-[#1f2430] text-slate-300 text-xs font-medium cursor-pointer"
             >
-              Anulo
+              {language === 'de' ? 'Abbrechen' : 'Anulo'}
             </button>
             <button
               type="submit"
               className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/10"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>Regjistro Takimin</span>
+              <span>{t('manualSaveBtn')}</span>
             </button>
           </div>
         </form>

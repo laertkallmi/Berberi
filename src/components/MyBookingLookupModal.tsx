@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useCalendar } from '../context/CalendarContext';
 import { Appointment } from '../types';
-import { formatAlbanianDate } from '../utils/dateUtils';
-import { Search, X, Calendar, Clock, User, Phone, CheckCircle2, AlertCircle } from 'lucide-react';
+import { formatDateByLang } from '../utils/dateUtils';
+import { getLocalizedStatus } from '../utils/translations';
+import { Search, X, Calendar, Clock, User, AlertCircle } from 'lucide-react';
 
 interface MyBookingLookupModalProps {
   isOpen: boolean;
@@ -10,7 +11,7 @@ interface MyBookingLookupModalProps {
 }
 
 export const MyBookingLookupModal: React.FC<MyBookingLookupModalProps> = ({ isOpen, onClose }) => {
-  const { findAppointmentsByQuery, cancelAppointment, settings } = useCalendar();
+  const { findAppointmentsByQuery, cancelAppointment, settings, language, t, formatPrice } = useCalendar();
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState(false);
   const [results, setResults] = useState<Appointment[]>([]);
@@ -26,17 +27,18 @@ export const MyBookingLookupModal: React.FC<MyBookingLookupModalProps> = ({ isOp
   };
 
   const getStatusBadge = (status: Appointment['status']) => {
+    const label = getLocalizedStatus(status, language);
     switch (status) {
       case 'konfirmuar':
-        return <span className="text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded text-[10px]">I Konfirmuar</span>;
+        return <span className="text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded text-[10px]">{label}</span>;
       case 'ne_pritje':
-        return <span className="text-amber-400 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded text-[10px]">Në Pritje</span>;
+        return <span className="text-amber-400 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded text-[10px]">{label}</span>;
       case 'perfunduar':
-        return <span className="text-blue-400 bg-blue-950/40 border border-blue-800/40 px-2 py-0.5 rounded text-[10px]">Përfunduar</span>;
+        return <span className="text-blue-400 bg-blue-950/40 border border-blue-800/40 px-2 py-0.5 rounded text-[10px]">{label}</span>;
       case 'anuluar':
-        return <span className="text-rose-400 bg-rose-950/40 border border-rose-800/40 px-2 py-0.5 rounded text-[10px]">Anuluar</span>;
+        return <span className="text-rose-400 bg-rose-950/40 border border-rose-800/40 px-2 py-0.5 rounded text-[10px]">{label}</span>;
       default:
-        return <span className="text-slate-400 bg-slate-900 border border-slate-700 px-2 py-0.5 rounded text-[10px]">{status}</span>;
+        return <span className="text-slate-400 bg-slate-900 border border-slate-700 px-2 py-0.5 rounded text-[10px]">{label}</span>;
     }
   };
 
@@ -52,10 +54,10 @@ export const MyBookingLookupModal: React.FC<MyBookingLookupModalProps> = ({ isOp
 
         <div className="mb-6">
           <h3 className="text-lg font-cinzel font-semibold text-white">
-            Verifiko Rezervimin Tuaj
+            {t('lookupModalTitle')}
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            Vendosni numrin e telefonit ose kodin e rezervimit (p.sh. REZ-4819).
+            {t('lookupModalSubtitle')}
           </p>
         </div>
 
@@ -64,7 +66,7 @@ export const MyBookingLookupModal: React.FC<MyBookingLookupModalProps> = ({ isOp
             <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Numri i telefonit ose Kodi REZ-..."
+              placeholder={t('lookupInputPlaceholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#161922] border border-[#262c3a] text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
@@ -74,7 +76,7 @@ export const MyBookingLookupModal: React.FC<MyBookingLookupModalProps> = ({ isOp
             type="submit"
             className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs transition-colors cursor-pointer"
           >
-            Kërko
+            {t('lookupSubmitBtn')}
           </button>
         </form>
 
@@ -83,10 +85,7 @@ export const MyBookingLookupModal: React.FC<MyBookingLookupModalProps> = ({ isOp
             {results.length === 0 ? (
               <div className="text-center py-8 text-slate-400">
                 <AlertCircle className="w-8 h-8 text-slate-500 mx-auto mb-2" />
-                <p className="text-sm">Nuk u gjet asnjë rezervim me këtë të dhënë.</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Kontrolloni numrin e telefonit ose kontaktoni direkt në WhatsApp.
-                </p>
+                <p className="text-sm">{t('lookupNoResults')}</p>
               </div>
             ) : (
               results.map((apt) => (
@@ -105,16 +104,16 @@ export const MyBookingLookupModal: React.FC<MyBookingLookupModalProps> = ({ isOp
                     <div className="flex items-center justify-between text-white font-medium">
                       <span>{apt.serviceName}</span>
                       <span className="text-amber-400 tabular-nums">
-                        {apt.price.toLocaleString()} {settings.currency}
+                        {formatPrice(apt.price, apt.serviceId)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-400">
                       <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                      <span>{formatAlbanianDate(apt.date)}</span>
+                      <span>{formatDateByLang(apt.date, language)}</span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-400">
                       <Clock className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Ora {apt.time} ({apt.durationMinutes} minuta)</span>
+                      <span>{language === 'de' ? `${apt.time} Uhr` : `Ora ${apt.time}`} ({apt.durationMinutes} min)</span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-400">
                       <User className="w-3.5 h-3.5 text-slate-500" />
@@ -126,8 +125,8 @@ export const MyBookingLookupModal: React.FC<MyBookingLookupModalProps> = ({ isOp
                     <div className="pt-2 border-t border-[#1e2330] flex justify-end">
                       <button
                         onClick={() => {
-                          if (confirm('A jeni të sigurt që dëshironi të anuloni këtë takim?')) {
-                            cancelAppointment(apt.id, 'Anuluar nga klienti në faqe');
+                          if (confirm(t('cancelConfirmPrompt'))) {
+                            cancelAppointment(apt.id, language === 'de' ? 'Vom Kunden storniert' : 'Anuluar nga klienti në faqe');
                             setResults((prev) =>
                               prev.map((a) =>
                                 a.id === apt.id ? { ...a, status: 'anuluar' } : a
@@ -137,7 +136,7 @@ export const MyBookingLookupModal: React.FC<MyBookingLookupModalProps> = ({ isOp
                         }}
                         className="text-xs text-rose-400 hover:text-rose-300 underline cursor-pointer"
                       >
-                        Anulo këtë takim
+                        {t('cancelBookingBtn')}
                       </button>
                     </div>
                   )}
